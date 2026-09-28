@@ -15,8 +15,9 @@ Aplicación móvil para Android que actúa como una lupa digital, permitiendo am
 - [x] Zoom analógico/digital mediante barra deslizante (SeekBar) y gesto de pellizco (Pinch-to-zoom).
 - [x] Encendido y apagado de linterna (Torch).
 - [x] Congelar cuadro actual en pantalla (Freeze frame) y reanudar.
-- [x] Guardar captura en la galería del dispositivo (MediaStore).
-- [x] Enfoque básico al tocar la pantalla.
+- [x] Zoom táctil (pellizco) y con barra deslizante sobre la imagen congelada, con paneo/arrastre para recorrerla.
+- [x] Guardar captura en la galería del dispositivo (tanto en vivo como congelada).
+- [x] Enfoque táctil y autoexposición en el punto exacto donde el usuario toca la pantalla.
 
 ## 4. Estructura de archivos
 - app/src/main/java/com/lupa/app/MainActivity.kt (Lógica principal de la cámara y controles)

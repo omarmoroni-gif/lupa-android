@@ -4,8 +4,8 @@
 - Fecha: 2026-09-27
 - Agente: Gemini (Antigravity)
 - Modo: @reverse-sdd
-- Qué se hizo: Análisis completo (@reverse-sdd), creación de spec.md, configuración y corrección de GitHub Actions (Java 17, Gradle 8.7, Android SDK) y compilación exitosa del APK en la nube (Artefacto: Lupa-APK de 5.4 MB).
-- Archivos tocados: AGENTS.md, spec.md, PROGRESS.md, .gitignore, .github/workflows/build-apk.yml, app/build.gradle.kts
+- Qué se hizo: Enfoque táctil exacto con AF/AE, soporte completo de zoom (slider y pinch) sobre imagen congelada con arrastre/desplazamiento táctil, guardado de imagen congelada a galería, actualización de spec.md.
+- Archivos tocados: app/src/main/java/com/lupa/app/MainActivity.kt, spec.md, PROGRESS.md
 
 ## Pendiente inmediato
 - [ ] Probar la instalación y funcionamiento de la app en el dispositivo móvil del usuario.
