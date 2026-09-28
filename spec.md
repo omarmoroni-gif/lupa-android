@@ -16,8 +16,11 @@ Aplicación móvil para Android que actúa como una lupa digital, permitiendo am
 - [x] Encendido y apagado de linterna (Torch).
 - [x] Congelar cuadro actual en pantalla (Freeze frame) y reanudar.
 - [x] Zoom táctil (pellizco) y con barra deslizante sobre la imagen congelada, con paneo/arrastre para recorrerla.
+- [x] Giro táctil de la imagen congelada con dos dedos (rotación gestual).
+- [x] Ajuste de brillo regulable (tanto en vivo como sobre imagen congelada).
 - [x] Guardar captura en la galería del dispositivo (tanto en vivo como congelada).
 - [x] Enfoque táctil y autoexposición en el punto exacto donde el usuario toca la pantalla.
+- [x] Interfaz elegante y moderna con barra de control flotante, esquinas redondeadas y botones circulares con íconos vectoriales.
 
 ## 4. Estructura de archivos
 - app/src/main/java/com/lupa/app/MainActivity.kt (Lógica principal de la cámara y controles)

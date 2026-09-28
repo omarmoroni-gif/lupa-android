@@ -7,4 +7,6 @@
     <string name="capture">Guardar</string>
     <string name="saved">Imagen guardada en la galería</string>
     <string name="camera_permission_needed">Se necesita permiso de cámara para usar la lupa</string>
+    <string name="brightness">Brillo</string>
+    <string name="frozen_hint">Congelada • Deslizá o girá con dos dedos</string>
 </resources>

@@ -3,8 +3,11 @@ package com.lupa.app
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -34,13 +37,18 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.math.atan2
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var frozenView: ImageView
+    private lateinit var frozenHintChip: View
+    private lateinit var panelBrightness: View
+    private lateinit var brightnessSlider: SeekBar
     private lateinit var zoomSlider: SeekBar
     private lateinit var btnFlash: MaterialButton
+    private lateinit var btnBrightness: MaterialButton
     private lateinit var btnFreeze: MaterialButton
     private lateinit var btnCapture: MaterialButton
 
@@ -53,9 +61,14 @@ class MainActivity : AppCompatActivity() {
     private var frozenScale = 1.0f
     private var frozenTranslateX = 0f
     private var frozenTranslateY = 0f
+    private var frozenRotation = 0f
+    private var lastRotationAngle = 0f
+    private var isRotating = false
     private var lastTouchX = 0f
     private var lastTouchY = 0f
     private var isDragging = false
+
+    private var brightnessLevel = 50
 
     private lateinit var cameraExecutor: ExecutorService
 
@@ -71,8 +84,12 @@ class MainActivity : AppCompatActivity() {
 
         previewView = findViewById(R.id.previewView)
         frozenView = findViewById(R.id.frozenView)
+        frozenHintChip = findViewById(R.id.frozenHintChip)
+        panelBrightness = findViewById(R.id.panelBrightness)
+        brightnessSlider = findViewById(R.id.brightnessSlider)
         zoomSlider = findViewById(R.id.zoomSlider)
         btnFlash = findViewById(R.id.btnFlash)
+        btnBrightness = findViewById(R.id.btnBrightness)
         btnFreeze = findViewById(R.id.btnFreeze)
         btnCapture = findViewById(R.id.btnCapture)
 
@@ -111,6 +128,7 @@ class MainActivity : AppCompatActivity() {
             btnFlash.visibility =
                 if (cam.cameraInfo.hasFlashUnit()) View.VISIBLE else View.GONE
             updateZoomSliderRange()
+            applyLiveBrightness()
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -126,6 +144,20 @@ class MainActivity : AppCompatActivity() {
                     val min = cam.cameraInfo.zoomState.value?.minZoomRatio ?: return
                     val max = cam.cameraInfo.zoomState.value?.maxZoomRatio ?: return
                     cam.cameraControl.setZoomRatio(min + (max - min) * progress / 100f)
+                }
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+
+        brightnessSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                brightnessLevel = progress
+                if (frozen) {
+                    applyFrozenBrightness()
+                } else {
+                    applyLiveBrightness()
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -177,14 +209,33 @@ class MainActivity : AppCompatActivity() {
 
         frozenView.setOnTouchListener { _, event ->
             frozenPinchDetector.onTouchEvent(event)
+
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     lastTouchX = event.rawX
                     lastTouchY = event.rawY
                     isDragging = true
+                    isRotating = false
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (event.pointerCount == 2) {
+                        val dx = event.getX(1) - event.getX(0)
+                        val dy = event.getY(1) - event.getY(0)
+                        lastRotationAngle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                        isRotating = true
+                        isDragging = false
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (isDragging && event.pointerCount == 1 && frozenScale > 1.0f) {
+                    if (event.pointerCount == 2 && isRotating) {
+                        val dx = event.getX(1) - event.getX(0)
+                        val dy = event.getY(1) - event.getY(0)
+                        val currentAngle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                        val delta = currentAngle - lastRotationAngle
+                        frozenRotation = (frozenRotation + delta) % 360f
+                        lastRotationAngle = currentAngle
+                        applyFrozenTransform()
+                    } else if (event.pointerCount == 1 && isDragging && frozenScale > 1.0f) {
                         val dx = event.rawX - lastTouchX
                         val dy = event.rawY - lastTouchY
                         lastTouchX = event.rawX
@@ -192,17 +243,45 @@ class MainActivity : AppCompatActivity() {
                         frozenTranslateX += dx
                         frozenTranslateY += dy
                         applyFrozenTransform()
-                    } else if (event.pointerCount > 1) {
-                        lastTouchX = event.rawX
-                        lastTouchY = event.rawY
+                    }
+                }
+                MotionEvent.ACTION_POINTER_UP -> {
+                    if (event.pointerCount <= 2) {
+                        isRotating = false
+                        val remainingIndex = if (event.actionIndex == 0) 1 else 0
+                        lastTouchX = event.getX(remainingIndex)
+                        lastTouchY = event.getY(remainingIndex)
+                        isDragging = true
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     isDragging = false
+                    isRotating = false
                 }
             }
             true
         }
+    }
+
+    private fun applyLiveBrightness() {
+        val cam = camera ?: return
+        val exposure = cam.cameraInfo.exposureState
+        if (exposure.isExposureCompensationSupported) {
+            val range = exposure.exposureCompensationRange
+            val index = (range.lower + (range.upper - range.lower) * (brightnessLevel / 100f)).toInt()
+            cam.cameraControl.setExposureCompensationIndex(index)
+        }
+    }
+
+    private fun applyFrozenBrightness() {
+        val offset = (brightnessLevel - 50) * 2.55f
+        val cm = ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, offset,
+            0f, 1f, 0f, 0f, offset,
+            0f, 0f, 1f, 0f, offset,
+            0f, 0f, 0f, 1f, 0f
+        ))
+        frozenView.colorFilter = ColorMatrixColorFilter(cm)
     }
 
     private fun applyFrozenTransform() {
@@ -215,6 +294,7 @@ class MainActivity : AppCompatActivity() {
         frozenView.scaleY = frozenScale
         frozenView.translationX = frozenTranslateX
         frozenView.translationY = frozenTranslateY
+        frozenView.rotation = frozenRotation
     }
 
     private fun updateFrozenSliderRange() {
@@ -235,7 +315,23 @@ class MainActivity : AppCompatActivity() {
             val cam = camera ?: return@setOnClickListener
             torchOn = !torchOn
             cam.cameraControl.enableTorch(torchOn)
-            btnFlash.text = getString(R.string.flash) + if (torchOn) " ON" else ""
+            updateFlashUi()
+        }
+
+        btnBrightness.setOnClickListener {
+            val isVisible = panelBrightness.visibility == View.VISIBLE
+            panelBrightness.visibility = if (isVisible) View.GONE else View.VISIBLE
+            if (!isVisible) {
+                btnBrightness.backgroundTintList =
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.blue_active))
+                btnBrightness.iconTint =
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.black))
+            } else {
+                btnBrightness.backgroundTintList =
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.btn_idle))
+                btnBrightness.iconTint =
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
+            }
         }
 
         btnFreeze.setOnClickListener {
@@ -247,6 +343,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnCapture.setOnClickListener { captureToGallery() }
+    }
+
+    private fun updateFlashUi() {
+        if (torchOn) {
+            btnFlash.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.amber_active))
+            btnFlash.iconTint =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.black))
+        } else {
+            btnFlash.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.btn_idle))
+            btnFlash.iconTint =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
+        }
     }
 
     private fun freeze() {
@@ -261,16 +371,24 @@ class MainActivity : AppCompatActivity() {
                             frozenBitmap = bitmap
                             frozenView.setImageBitmap(bitmap)
                             frozenView.visibility = View.VISIBLE
+                            frozenHintChip.visibility = View.VISIBLE
                             frozen = true
                             frozenScale = 1.0f
                             frozenTranslateX = 0f
                             frozenTranslateY = 0f
+                            frozenRotation = 0f
                             frozenView.scaleX = 1.0f
                             frozenView.scaleY = 1.0f
                             frozenView.translationX = 0f
                             frozenView.translationY = 0f
+                            frozenView.rotation = 0f
+                            applyFrozenBrightness()
                             zoomSlider.progress = 0
-                            btnFreeze.text = getString(R.string.unfreeze)
+                            btnFreeze.setIconResource(R.drawable.ic_play)
+                            btnFreeze.backgroundTintList =
+                                ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.blue_active))
+                            btnFreeze.iconTint =
+                                ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.black))
                         }
                     }
                 }
@@ -281,22 +399,31 @@ class MainActivity : AppCompatActivity() {
         frozenBitmap?.recycle()
         frozenBitmap = null
         frozenView.setImageDrawable(null)
+        frozenView.colorFilter = null
         frozenView.visibility = View.GONE
+        frozenHintChip.visibility = View.GONE
         frozen = false
         frozenScale = 1.0f
         frozenTranslateX = 0f
         frozenTranslateY = 0f
+        frozenRotation = 0f
         frozenView.scaleX = 1.0f
         frozenView.scaleY = 1.0f
         frozenView.translationX = 0f
         frozenView.translationY = 0f
-        btnFreeze.text = getString(R.string.freeze)
+        frozenView.rotation = 0f
+        btnFreeze.setIconResource(R.drawable.ic_freeze)
+        btnFreeze.backgroundTintList =
+            ColorStateList.valueOf(ContextCompat.getColor(this, R.color.accent))
+        btnFreeze.iconTint =
+            ColorStateList.valueOf(ContextCompat.getColor(this, R.color.black))
         updateZoomSliderRange()
     }
 
     private fun captureToGallery() {
         if (frozen && frozenBitmap != null) {
-            saveBitmapToGallery(frozenBitmap!!)
+            val transformed = getTransformedFrozenBitmap()
+            saveBitmapToGallery(transformed)
             return
         }
 
@@ -326,6 +453,31 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             })
+    }
+
+    private fun getTransformedFrozenBitmap(): Bitmap {
+        val base = frozenBitmap ?: return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val matrix = android.graphics.Matrix()
+        if (frozenRotation != 0f) {
+            matrix.postRotate(frozenRotation)
+        }
+        val rotated = Bitmap.createBitmap(base, 0, 0, base.width, base.height, matrix, true)
+        if (brightnessLevel == 50) return rotated
+
+        val result = Bitmap.createBitmap(rotated.width, rotated.height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(result)
+        val paint = android.graphics.Paint()
+        val offset = (brightnessLevel - 50) * 2.55f
+        val cm = ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, offset,
+            0f, 1f, 0f, 0f, offset,
+            0f, 0f, 1f, 0f, offset,
+            0f, 0f, 0f, 1f, 0f
+        ))
+        paint.colorFilter = ColorMatrixColorFilter(cm)
+        canvas.drawBitmap(rotated, 0f, 0f, paint)
+        if (rotated != base) rotated.recycle()
+        return result
     }
 
     private fun saveBitmapToGallery(bitmap: Bitmap) {
