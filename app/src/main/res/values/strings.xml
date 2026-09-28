@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lupa</string>
+    <string name="flash">Luz</string>
+    <string name="freeze">Congelar</string>
+    <string name="unfreeze">Volver</string>
+    <string name="capture">Guardar</string>
+    <string name="saved">Imagen guardada en la galería</string>
+    <string name="camera_permission_needed">Se necesita permiso de cámara para usar la lupa</string>
+</resources>
