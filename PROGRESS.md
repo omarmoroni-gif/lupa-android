@@ -4,8 +4,8 @@
 - Fecha: 2026-09-27
 - Agente: Gemini (Antigravity)
 - Modo: @reverse-sdd
-- Qué se hizo: Análisis completo (@reverse-sdd), creación de spec.md, configuración de GitHub Actions para compilar el APK online y subida inicial del repositorio a GitHub.
-- Archivos tocados: AGENTS.md, spec.md, PROGRESS.md, .gitignore, .github/workflows/build-apk.yml
+- Qué se hizo: Análisis completo (@reverse-sdd), creación de spec.md, configuración de GitHub Actions para compilar el APK online, corrección de compatibilidad con Java 17 y Android SDK.
+- Archivos tocados: AGENTS.md, spec.md, PROGRESS.md, .gitignore, .github/workflows/build-apk.yml, app/build.gradle.kts
 
 ## Pendiente inmediato
 - [ ] Descargar el APK compilado desde GitHub Actions y probarlo en un celular.
